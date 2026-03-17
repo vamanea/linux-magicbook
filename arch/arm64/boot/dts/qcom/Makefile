@@ -622,3 +622,5 @@ dtb-$(CONFIG_ARCH_QCOM) += sm8750-staging.dtbo
 
 dtb-$(CONFIG_ARCH_QCOM) += kaanapali-staging.dtbo
 dtb-$(CONFIG_ARCH_QCOM) += x1e80100-honor-magicbook-art-14.dtb
+x1e80100-honor-magicbook-art-14-el2-dtbs := x1e80100-honor-magicbook-art-14.dtb x1-el2.dtbo
+dtb-$(CONFIG_ARCH_QCOM) += x1e80100-honor-magicbook-art-14.dtb x1e80100-honor-magicbook-art-14-el2.dtb
