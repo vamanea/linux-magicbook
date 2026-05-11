@@ -70,6 +70,13 @@ enum msm_dsi_controller {
 
 #define MSM_GPU_MAX_RINGS 4
 
+enum msm_mode_dsc_cfg {
+	MSM_MODE_DSC_UNAVAILABLE,
+	MSM_MODE_DSC_OPTIONAL,
+	MSM_MODE_DSC_PREFERRED,
+	MSM_MODE_DSC_REQUIRED,
+};
+
 struct msm_drm_private {
 
 	struct drm_device *dev;

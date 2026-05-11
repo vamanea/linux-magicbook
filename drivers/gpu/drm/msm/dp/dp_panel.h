@@ -11,12 +11,23 @@
 
 #include "dp_aux.h"
 #include "dp_link.h"
+#include "msm_drv.h"
 
 struct edid;
 
+#define MSM_DP_DSC_COMP_RATIO 3
+
+#define MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE 0
+
+struct msm_dp_display_mode_cfg {
+	u32 bpp;
+	bool fec_available;
+	enum msm_mode_dsc_cfg dsc;
+};
+
 struct msm_dp_display_mode {
 	struct drm_display_mode drm_mode;
-	u32 bpp;
+	struct msm_dp_display_mode_cfg mode_cfg;
 	u32 h_active_low;
 	u32 v_active_low;
 	bool out_fmt_is_yuv_420;
@@ -65,8 +76,8 @@ int msm_dp_panel_deinit(struct msm_dp_panel *msm_dp_panel);
 int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en);
 int msm_dp_panel_read_sink_caps(struct msm_dp_panel *msm_dp_panel,
 		struct drm_connector *connector);
-u32 msm_dp_panel_get_mode_bpp(struct msm_dp_panel *msm_dp_panel, u32 mode_max_bpp,
-			u32 mode_pclk_khz);
+struct msm_dp_display_mode_cfg msm_dp_panel_get_mode_cfg(struct msm_dp_panel *msm_dp_panel,
+			u32 mode_max_bpp, enum msm_mode_dsc_cfg dsc_cfg, u32 mode_pclk_khz);
 int msm_dp_panel_get_modes(struct msm_dp_panel *msm_dp_panel,
 		struct drm_connector *connector);
 void msm_dp_panel_handle_sink_request(struct msm_dp_panel *msm_dp_panel);
