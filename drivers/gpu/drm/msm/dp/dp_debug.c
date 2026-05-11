@@ -65,7 +65,11 @@ static int msm_dp_debug_show(struct seq_file *seq, void *p)
 	seq_printf(seq, "\t\tpixel clock khz = %d\n",
 			drm_mode->clock);
 	seq_printf(seq, "\t\tbpp = %d\n",
-			debug->panel->msm_dp_mode.bpp);
+			debug->panel->msm_dp_mode.mode_cfg.bpp);
+	seq_printf(seq, "\t\tfec = %d\n",
+			debug->panel->msm_dp_mode.mode_cfg.fec_available);
+	seq_printf(seq, "\t\tdsc = %d\n",
+			debug->panel->msm_dp_mode.mode_cfg.dsc);
 
 	/* Link Information */
 	seq_printf(seq, "\tdp_link:\n\t\ttest_requested = %d\n",

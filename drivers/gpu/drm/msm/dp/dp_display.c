@@ -91,7 +91,6 @@ struct msm_dp_display_private {
 	struct msm_dp_panel   *panel;
 	struct msm_dp_ctrl    *ctrl;
 
-	struct msm_dp_display_mode msm_dp_mode;
 	struct msm_dp msm_dp_display;
 
 	/* wait for audio signaling */
@@ -827,20 +826,6 @@ error:
 	return rc;
 }
 
-static int msm_dp_display_set_mode(struct msm_dp *msm_dp_display,
-			       struct msm_dp_display_mode *mode)
-{
-	struct msm_dp_display_private *dp;
-
-	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
-
-	drm_mode_copy(&dp->panel->msm_dp_mode.drm_mode, &mode->drm_mode);
-	dp->panel->msm_dp_mode.bpp = mode->bpp;
-	dp->panel->msm_dp_mode.out_fmt_is_yuv_420 = mode->out_fmt_is_yuv_420;
-	msm_dp_panel_init_panel_info(dp->panel);
-	return 0;
-}
-
 static int msm_dp_display_enable(struct msm_dp_display_private *dp, bool force_link_train)
 {
 	int rc = 0;
@@ -934,10 +919,10 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 {
 	const u32 num_components = 3, default_bpp = 24;
 	struct msm_dp_display_private *msm_dp_display;
-	struct msm_dp_link_info *link_info;
-	u32 mode_rate_khz = 0, supported_rate_khz = 0, mode_bpp = 0;
+	u32 mode_bpp;
 	struct msm_dp *dp;
 	int mode_pclk_khz = mode->clock;
+	struct msm_dp_display_mode_cfg mode_cfg;
 
 	dp = to_dp_bridge(bridge)->msm_dp_display;
 
@@ -947,7 +932,6 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 	}
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
-	link_info = &msm_dp_display->panel->link_info;
 
 	if ((drm_mode_is_420_only(&dp->connector->display_info, mode) &&
 	     msm_dp_display->panel->vsc_sdp_supported) ||
@@ -961,13 +945,14 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 	if (!mode_bpp)
 		mode_bpp = default_bpp;
 
-	mode_bpp = msm_dp_panel_get_mode_bpp(msm_dp_display->panel,
-			mode_bpp, mode_pclk_khz);
+	/* Need to use clock not-scaled by yuv/wide-bus for link rate check */
+	mode_cfg = msm_dp_panel_get_mode_cfg(msm_dp_display->panel,
+			mode_bpp,
+			msm_dp_display->panel->dsc_cap.supported ?
+					MSM_MODE_DSC_OPTIONAL : MSM_MODE_DSC_UNAVAILABLE,
+			mode->clock);
 
-	mode_rate_khz = mode_pclk_khz * mode_bpp;
-	supported_rate_khz = link_info->num_lanes * link_info->rate * 8;
-
-	if (mode_rate_khz > supported_rate_khz)
+	if (mode_cfg.bpp == MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE)
 		return MODE_BAD;
 
 	return MODE_OK;
@@ -1538,7 +1523,7 @@ bool msm_dp_wide_bus_available(const struct msm_dp *msm_dp_display)
 
 	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
 
-	if (dp->msm_dp_mode.out_fmt_is_yuv_420)
+	if (dp->panel->msm_dp_mode.out_fmt_is_yuv_420)
 		return false;
 
 	return dp->wide_bus_supported;
@@ -1600,7 +1585,7 @@ void msm_dp_bridge_atomic_enable(struct drm_bridge *drm_bridge,
 	bool force_link_train = false;
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
-	if (!msm_dp_display->msm_dp_mode.drm_mode.clock) {
+	if (!msm_dp_display->panel->msm_dp_mode.drm_mode.clock) {
 		DRM_ERROR("invalid params\n");
 		return;
 	}
@@ -1621,7 +1606,7 @@ void msm_dp_bridge_atomic_enable(struct drm_bridge *drm_bridge,
 		return;
 	}
 
-	rc = msm_dp_display_set_mode(dp, &msm_dp_display->msm_dp_mode);
+	rc = msm_dp_panel_init_panel_info(msm_dp_display->panel);
 	if (rc) {
 		DRM_ERROR("Failed to perform a mode set, rc=%d\n", rc);
 		mutex_unlock(&msm_dp_display->event_mutex);
@@ -1706,35 +1691,37 @@ void msm_dp_bridge_mode_set(struct drm_bridge *drm_bridge,
 	struct msm_dp *dp = msm_dp_bridge->msm_dp_display;
 	struct msm_dp_display_private *msm_dp_display;
 	struct msm_dp_panel *msm_dp_panel;
+	struct msm_dp_display_mode *msm_dp_mode;
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
 	msm_dp_panel = msm_dp_display->panel;
+	msm_dp_mode = &msm_dp_display->panel->msm_dp_mode;
 
-	memset(&msm_dp_display->msm_dp_mode, 0x0, sizeof(struct msm_dp_display_mode));
+	memset(msm_dp_mode, 0x0, sizeof(struct msm_dp_display_mode));
 
 	if (msm_dp_display_check_video_test(dp))
-		msm_dp_display->msm_dp_mode.bpp = msm_dp_display_get_test_bpp(dp);
+		msm_dp_mode->mode_cfg.bpp = msm_dp_display_get_test_bpp(dp);
 	else /* Default num_components per pixel = 3 */
-		msm_dp_display->msm_dp_mode.bpp = dp->connector->display_info.bpc * 3;
+		msm_dp_mode->mode_cfg.bpp = dp->connector->display_info.bpc * 3;
 
-	if (!msm_dp_display->msm_dp_mode.bpp)
-		msm_dp_display->msm_dp_mode.bpp = 24; /* Default bpp */
+	if (!msm_dp_mode->mode_cfg.bpp)
+		msm_dp_mode->mode_cfg.bpp = 24; /* Default bpp */
 
-	drm_mode_copy(&msm_dp_display->msm_dp_mode.drm_mode, adjusted_mode);
+	drm_mode_copy(&msm_dp_mode->drm_mode, adjusted_mode);
 
-	msm_dp_display->msm_dp_mode.v_active_low =
-		!!(msm_dp_display->msm_dp_mode.drm_mode.flags & DRM_MODE_FLAG_NVSYNC);
+	msm_dp_mode->v_active_low =
+		!!(msm_dp_mode->drm_mode.flags & DRM_MODE_FLAG_NVSYNC);
 
-	msm_dp_display->msm_dp_mode.h_active_low =
-		!!(msm_dp_display->msm_dp_mode.drm_mode.flags & DRM_MODE_FLAG_NHSYNC);
+	msm_dp_mode->h_active_low =
+		!!(msm_dp_mode->drm_mode.flags & DRM_MODE_FLAG_NHSYNC);
 
-	msm_dp_display->msm_dp_mode.out_fmt_is_yuv_420 =
+	msm_dp_mode->out_fmt_is_yuv_420 =
 		drm_mode_is_420_only(&dp->connector->display_info, adjusted_mode) &&
 		msm_dp_panel->vsc_sdp_supported;
 
 	/* populate wide_bus_support to different layers */
 	msm_dp_display->ctrl->wide_bus_en =
-		msm_dp_display->msm_dp_mode.out_fmt_is_yuv_420 ? false : msm_dp_display->wide_bus_supported;
+		msm_dp_mode->out_fmt_is_yuv_420 ? false : msm_dp_display->wide_bus_supported;
 }
 
 void msm_dp_bridge_hpd_enable(struct drm_bridge *bridge)

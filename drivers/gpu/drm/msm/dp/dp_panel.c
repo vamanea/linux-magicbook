@@ -11,6 +11,7 @@
 #include <drm/drm_edid.h>
 #include <drm/drm_of.h>
 #include <drm/drm_print.h>
+#include <drm/drm_fixed.h>
 
 #include <linux/io.h>
 
@@ -140,25 +141,136 @@ static int msm_dp_panel_read_dpcd(struct msm_dp_panel *msm_dp_panel)
 	return rc;
 }
 
-static u32 msm_dp_panel_get_supported_bpp(struct msm_dp_panel *msm_dp_panel,
-		u32 mode_edid_bpp, u32 mode_pclk_khz)
+static u32 msm_dp_panel_calc_link_rate(struct msm_dp_panel *msm_dp_panel,
+			bool fec_en)
 {
 	const struct msm_dp_link_info *link_info;
-	const u32 max_supported_bpp = 30, min_supported_bpp = 18;
-	u32 bpp, data_rate_khz;
-
-	bpp = min(mode_edid_bpp, max_supported_bpp);
+	s64 rate_fp;
+	s64 fec_overhead_fp;
+	u32 data_rate_khz;
 
 	link_info = &msm_dp_panel->link_info;
 	data_rate_khz = link_info->num_lanes * link_info->rate * 8;
 
-	do {
+	if (fec_en) {
+		fec_overhead_fp = drm_fixp_from_fraction(100000, 97582);
+
+		rate_fp = drm_int2fixp(data_rate_khz);
+		rate_fp = drm_fixp_div(rate_fp, fec_overhead_fp);
+		data_rate_khz = drm_fixp2int(rate_fp);
+	}
+
+	return data_rate_khz;
+}
+
+static u32 msm_dp_panel_get_supported_bpp_no_dsc(
+		u32 mode_edid_bpp,
+		u32 mode_pclk_khz,
+		u32 data_rate_khz)
+{
+	const u32 max_supported_bpp = 30, min_supported_bpp = 18;
+	u32 bpp = min(mode_edid_bpp, max_supported_bpp);
+
+	for (; bpp >= min_supported_bpp; bpp -= 6)
 		if (mode_pclk_khz * bpp <= data_rate_khz)
 			return bpp;
-		bpp -= 6;
-	} while (bpp > min_supported_bpp);
 
-	return min_supported_bpp;
+	return MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE;
+}
+
+#define MSM_DP_MIN_SUPPORTED_DSC_BPP 24
+static u32 msm_dp_panel_get_supported_bpp_dsc(
+		u32 mode_edid_bpp,
+		u32 mode_pclk_khz,
+		u32 data_rate_khz,
+		u8 bpc[3])
+{
+	const u32 max_supported_bpp = min(mode_edid_bpp, 30);
+	const u32 min_supported_bpp = MSM_DP_MIN_SUPPORTED_DSC_BPP;
+	const u32 num_components = 3;
+	u32 max_bpp = MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE;
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		if (bpc[i]) {
+			u32 bpp = bpc[i] * num_components;
+
+			if (bpp > max_bpp &&
+						bpp >= min_supported_bpp &&
+						bpp <= max_supported_bpp &&
+						mode_pclk_khz * bpp / MSM_DP_DSC_COMP_RATIO <=
+									data_rate_khz)
+				max_bpp = bpp;
+		}
+	}
+
+	return max_bpp;
+}
+
+static struct msm_dp_display_mode_cfg msm_dp_panel_get_cfg_from_bpp(
+	u32 bpp, u32 dsc_bpp, enum msm_mode_dsc_cfg dsc_cfg, bool fec_en)
+{
+	const u32 min_supported_bpp = MSM_DP_MIN_SUPPORTED_DSC_BPP;
+	struct msm_dp_display_mode_cfg cfg = {0};
+
+	cfg.fec_available = fec_en;
+
+	if (!dsc_bpp)
+		dsc_cfg = MSM_MODE_DSC_UNAVAILABLE;
+	else if (!bpp)
+		dsc_cfg = MSM_MODE_DSC_REQUIRED;
+
+	switch (dsc_cfg) {
+	default:
+	case MSM_MODE_DSC_UNAVAILABLE:
+		cfg.bpp = bpp;
+		break;
+	case MSM_MODE_DSC_OPTIONAL:
+	case MSM_MODE_DSC_PREFERRED:
+		/*
+		 * Return "if dsc is preferred" when not requested to be required.
+		 * dsc is preferred if non-dsc bpp is of lower bpp than
+		 * min supported dsc bpp
+		 */
+		dsc_cfg = bpp < min_supported_bpp ?
+					MSM_MODE_DSC_PREFERRED :
+					MSM_MODE_DSC_OPTIONAL;
+		cfg.bpp = bpp;
+		break;
+	case MSM_MODE_DSC_REQUIRED:
+		cfg.bpp = dsc_bpp;
+		break;
+	}
+
+	cfg.dsc = dsc_cfg;
+
+	return cfg;
+}
+
+static struct msm_dp_display_mode_cfg msm_dp_panel_get_supported_cfg(
+		struct msm_dp_panel *msm_dp_panel,
+		u32 mode_edid_bpp,
+		enum msm_mode_dsc_cfg dsc_cfg,
+		u32 mode_pclk_khz)
+{
+	u32 bpp = MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE;
+	u32 dsc_bpp = MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE;
+	u32 data_rate_khz;
+	bool fec_en;
+
+	fec_en = msm_dp_panel->fec_cap.supported;
+	data_rate_khz = msm_dp_panel_calc_link_rate(msm_dp_panel, fec_en);
+
+	if (dsc_cfg < MSM_MODE_DSC_REQUIRED)
+		bpp = msm_dp_panel_get_supported_bpp_no_dsc(
+					mode_edid_bpp, mode_pclk_khz, data_rate_khz);
+
+	if (dsc_cfg > MSM_MODE_DSC_UNAVAILABLE)
+		dsc_bpp = msm_dp_panel_get_supported_bpp_dsc(
+					mode_edid_bpp, mode_pclk_khz, data_rate_khz,
+					msm_dp_panel->dsc_cap.bpc);
+
+	return msm_dp_panel_get_cfg_from_bpp(bpp, dsc_bpp, dsc_cfg, fec_en);
 }
 
 static void msm_dp_panel_read_sink_fec_caps(struct msm_dp_panel_private *panel)
@@ -296,27 +408,30 @@ end:
 	return rc;
 }
 
-u32 msm_dp_panel_get_mode_bpp(struct msm_dp_panel *msm_dp_panel,
-		u32 mode_edid_bpp, u32 mode_pclk_khz)
+struct msm_dp_display_mode_cfg msm_dp_panel_get_mode_cfg(
+		struct msm_dp_panel *msm_dp_panel,
+		u32 mode_edid_bpp,
+		enum msm_mode_dsc_cfg dsc_cfg,
+		u32 mode_pclk_khz)
 {
 	struct msm_dp_panel_private *panel;
-	u32 bpp;
+	struct msm_dp_display_mode_cfg cfg = {0};
 
 	if (!msm_dp_panel || !mode_edid_bpp || !mode_pclk_khz) {
 		DRM_ERROR("invalid input\n");
-		return 0;
+		return cfg;
 	}
 
 	panel = container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
 
-	if (msm_dp_panel->video_test)
-		bpp = msm_dp_link_bit_depth_to_bpp(
+	if (msm_dp_panel->video_test) {
+		cfg.bpp = msm_dp_link_bit_depth_to_bpp(
 				panel->link->test_video.test_bit_depth);
-	else
-		bpp = msm_dp_panel_get_supported_bpp(msm_dp_panel, mode_edid_bpp,
-				mode_pclk_khz);
-
-	return bpp;
+		return cfg;
+	} else {
+		return msm_dp_panel_get_supported_cfg(msm_dp_panel, mode_edid_bpp,
+				dsc_cfg, mode_pclk_khz);
+	}
 }
 
 int msm_dp_panel_get_modes(struct msm_dp_panel *msm_dp_panel,
@@ -588,7 +703,7 @@ static int msm_dp_panel_setup_vsc_sdp_yuv_420(struct msm_dp_panel *msm_dp_panel)
 	vsc_sdp_data.colorimetry = DP_COLORIMETRY_DEFAULT;
 
 	/* VSC SDP Payload for DB17 */
-	vsc_sdp_data.bpc = msm_dp_mode->bpp / 3;
+	vsc_sdp_data.bpc = msm_dp_mode->mode_cfg.bpp / 3;
 	vsc_sdp_data.dynamic_range = DP_DYNAMIC_RANGE_CTA;
 
 	/* VSC SDP Payload for DB18 */
@@ -685,9 +800,11 @@ int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en)
 int msm_dp_panel_init_panel_info(struct msm_dp_panel *msm_dp_panel)
 {
 	struct drm_display_mode *drm_mode;
+	struct msm_dp_display_mode_cfg *mode_cfg;
 	struct msm_dp_panel_private *panel;
 
 	drm_mode = &msm_dp_panel->msm_dp_mode.drm_mode;
+	mode_cfg = &msm_dp_panel->msm_dp_mode.mode_cfg;
 
 	panel = container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
 
@@ -710,13 +827,18 @@ int msm_dp_panel_init_panel_info(struct msm_dp_panel *msm_dp_panel)
 			drm_mode->vsync_end - drm_mode->vsync_start);
 	drm_dbg_dp(panel->drm_dev, "pixel clock (KHz)=(%d)\n",
 				drm_mode->clock);
-	drm_dbg_dp(panel->drm_dev, "bpp = %d\n", msm_dp_panel->msm_dp_mode.bpp);
+	drm_dbg_dp(panel->drm_dev, "bpp = %d\n", mode_cfg->bpp);
 
-	msm_dp_panel->msm_dp_mode.bpp = msm_dp_panel_get_mode_bpp(msm_dp_panel, msm_dp_panel->msm_dp_mode.bpp,
-						      msm_dp_panel->msm_dp_mode.drm_mode.clock);
+	*mode_cfg = msm_dp_panel_get_mode_cfg(
+						      msm_dp_panel,
+						      mode_cfg->bpp,
+						      mode_cfg->dsc,
+						      drm_mode->clock);
 
-	drm_dbg_dp(panel->drm_dev, "updated bpp = %d\n",
-				msm_dp_panel->msm_dp_mode.bpp);
+	drm_dbg_dp(panel->drm_dev, "updated_bpp=%d fec=%d dsc=%d\n",
+				mode_cfg->bpp,
+				mode_cfg->fec_available,
+				mode_cfg->dsc);
 
 	return 0;
 }
