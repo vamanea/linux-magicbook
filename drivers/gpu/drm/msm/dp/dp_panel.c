@@ -161,6 +161,69 @@ static u32 msm_dp_panel_get_supported_bpp(struct msm_dp_panel *msm_dp_panel,
 	return min_supported_bpp;
 }
 
+static void msm_dp_panel_read_sink_fec_caps(struct msm_dp_panel_private *panel)
+{
+	int rlen;
+	u8 fec_dpcd;
+	rlen = drm_dp_dpcd_readb(panel->aux, DP_FEC_CAPABILITY, &fec_dpcd);
+	if (rlen < 1) {
+		DRM_ERROR("fec capability read failed, rlen=%d\n", rlen);
+		return;
+	}
+
+	panel->msm_dp_panel.fec_cap.supported = (fec_dpcd & DP_FEC_CAPABLE) > 0;
+}
+
+static bool msm_dp_panel_dsc_version_supported(u8 version_major, u8 version_minor)
+{
+	return version_major == 0x1 &&
+				(version_minor == 0x1 || version_minor == 0x2);
+}
+
+static void msm_dp_panel_decode_dsc_dpcd(struct msm_dp_panel_dsc *dsc_cap,
+			const u8 dsc_dpcd[DP_DSC_RECEIVER_CAP_SIZE])
+{
+	if (drm_dp_sink_supports_dsc(dsc_dpcd)) {
+		u8 version = dsc_dpcd[DP_DSC_REV - DP_DSC_SUPPORT];
+
+		dsc_cap->version_major = (version & DP_DSC_MAJOR_MASK) >> DP_DSC_MAJOR_SHIFT;
+		dsc_cap->version_minor = (version & DP_DSC_MINOR_MASK) >> DP_DSC_MINOR_SHIFT;
+
+		dsc_cap->supported =
+				msm_dp_panel_dsc_version_supported(dsc_cap->version_major, dsc_cap->version_minor);
+
+		if (dsc_cap->supported) {
+			int num_bpc, i;
+			dsc_cap->block_pred_en =
+					(dsc_dpcd[DP_DSC_BLK_PREDICTION_SUPPORT - DP_DSC_SUPPORT] &
+							DP_DSC_BLK_PREDICTION_IS_SUPPORTED) > 0;
+			num_bpc = drm_dp_dsc_sink_supported_input_bpcs(dsc_dpcd, dsc_cap->bpc);
+			for (i = num_bpc; i < ARRAY_SIZE(dsc_cap->bpc); i++)
+				dsc_cap->bpc[i] = 0;
+		}
+	}
+}
+
+static void msm_dp_panel_read_sink_dsc_caps(struct msm_dp_panel_private *panel)
+{
+	int rlen;
+	u8 dpcd_rev;
+	u8 dsc_dpcd[DP_DSC_RECEIVER_CAP_SIZE];
+
+	dpcd_rev = panel->msm_dp_panel.dpcd[DP_DPCD_REV];
+
+	if (dpcd_rev >= DP_DPCD_REV_14) {
+		rlen = drm_dp_dpcd_read(panel->aux, DP_DSC_SUPPORT,
+					dsc_dpcd, DP_DSC_RECEIVER_CAP_SIZE);
+		if (rlen < DP_DSC_RECEIVER_CAP_SIZE) {
+			DRM_ERROR("dsc dpcd read failed, rlen=%d\n", rlen);
+			return;
+		}
+
+		msm_dp_panel_decode_dsc_dpcd(&panel->msm_dp_panel.dsc_cap, dsc_dpcd);
+	}
+}
+
 int msm_dp_panel_read_sink_caps(struct msm_dp_panel *msm_dp_panel,
 	struct drm_connector *connector)
 {
@@ -217,6 +280,17 @@ int msm_dp_panel_read_sink_caps(struct msm_dp_panel *msm_dp_panel,
 			goto end;
 		}
 	}
+
+	memset(&msm_dp_panel->fec_cap, 0, sizeof(msm_dp_panel->fec_cap));
+	msm_dp_panel_read_sink_fec_caps(panel);
+
+	memset(&msm_dp_panel->dsc_cap, 0, sizeof(msm_dp_panel->dsc_cap));
+	if (msm_dp_panel->fec_cap.supported)
+		msm_dp_panel_read_sink_dsc_caps(panel);
+
+	drm_dbg_dp(panel->drm_dev, "fec_cap=%d dsc_cap=%d\n",
+			msm_dp_panel->fec_cap.supported,
+			msm_dp_panel->dsc_cap.supported);
 
 end:
 	return rc;

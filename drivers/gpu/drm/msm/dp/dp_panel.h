@@ -27,6 +27,20 @@ struct msm_dp_panel_psr {
 	u8 capabilities;
 };
 
+struct msm_dp_panel_fec {
+	bool supported;
+	bool enabled;
+};
+
+struct msm_dp_panel_dsc {
+	bool supported;
+	u8 version_major;
+	u8 version_minor;
+	bool block_pred_en;
+	u8 bpc[3];
+	bool enabled;
+};
+
 struct msm_dp_panel {
 	/* dpcd raw data */
 	u8 dpcd[DP_RECEIVER_CAP_SIZE];
@@ -37,6 +51,8 @@ struct msm_dp_panel {
 	struct drm_connector *connector;
 	struct msm_dp_display_mode msm_dp_mode;
 	struct msm_dp_panel_psr psr_cap;
+	struct msm_dp_panel_fec fec_cap;
+	struct msm_dp_panel_dsc dsc_cap;
 	bool video_test;
 	bool vsc_sdp_supported;
 	u32 hw_revision;
