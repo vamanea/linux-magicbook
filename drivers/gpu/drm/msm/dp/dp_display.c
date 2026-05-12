@@ -934,7 +934,7 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
 
-	if ((drm_mode_is_420_only(&dp->connector->display_info, mode) &&
+	if ((drm_mode_is_420_only(info, mode) &&
 	     msm_dp_display->panel->vsc_sdp_supported) ||
 	     msm_dp_wide_bus_available(dp))
 		mode_pclk_khz /= 2;
@@ -942,7 +942,7 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 	if (mode_pclk_khz > DP_MAX_PIXEL_CLK_KHZ)
 		return MODE_CLOCK_HIGH;
 
-	mode_bpp = dp->connector->display_info.bpc * num_components;
+	mode_bpp = info->bpc * num_components;
 	if (!mode_bpp)
 		mode_bpp = default_bpp;
 
@@ -1515,7 +1515,11 @@ bool msm_dp_is_yuv_420_enabled(const struct msm_dp *msm_dp_display,
 bool msm_dp_needs_periph_flush(const struct msm_dp *msm_dp_display,
 			       const struct drm_display_mode *mode)
 {
-	return msm_dp_is_yuv_420_enabled(msm_dp_display, mode);
+	struct msm_dp_display_private *dp;
+	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	return msm_dp_is_yuv_420_enabled(msm_dp_display, mode) ||
+				dp->panel->dsc_cap.enabled;
 }
 
 bool msm_dp_wide_bus_available(const struct msm_dp *msm_dp_display)
@@ -1528,6 +1532,50 @@ bool msm_dp_wide_bus_available(const struct msm_dp *msm_dp_display)
 		return false;
 
 	return dp->wide_bus_supported;
+}
+
+struct drm_dsc_config *msm_dp_get_dsc_config(struct msm_dp *msm_dp_display)
+{
+	struct msm_dp_display_private *dp;
+
+	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	if (dp->panel->dsc_cap.enabled)
+		return &dp->panel->msm_dp_mode.drm_dsc;
+
+	return NULL;
+}
+
+enum msm_mode_dsc_cfg msm_dp_get_mode_dsc_cfg(struct msm_dp *msm_dp_display,
+			const struct drm_display_mode *mode)
+{
+	const u32 num_components = 3, default_bpp = 24;
+	struct msm_dp_display_private *dp;
+	u32 mode_bpp;
+	struct msm_dp_display_mode_cfg mode_cfg;
+
+	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	if (!dp->panel->dsc_cap.supported)
+		return MSM_MODE_DSC_UNAVAILABLE;
+
+	mode_bpp = msm_dp_display->connector->display_info.bpc * num_components;
+	if (!mode_bpp)
+		mode_bpp = default_bpp;
+
+	mode_cfg = msm_dp_panel_get_mode_cfg(dp->panel,
+			mode_bpp, MSM_MODE_DSC_OPTIONAL, mode->clock);
+	return mode_cfg.dsc;
+}
+
+void msm_dp_set_dsc_enable(struct msm_dp *msm_dp_display, int num_dsc)
+{
+	struct msm_dp_display_private *dp;
+
+	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	dp->panel->dsc_cap.enabled = num_dsc > 0;
+	dp->panel->dsc_cap.num_dsc = num_dsc;
 }
 
 u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display)
@@ -1673,15 +1721,6 @@ void msm_dp_bridge_atomic_enable(struct drm_bridge *drm_bridge,
 		return;
 	}
 
-	rc = msm_dp_panel_init_panel_info(msm_dp_display->panel);
-	if (rc) {
-		DRM_ERROR("Failed to perform a mode set, rc=%d\n", rc);
-		mutex_unlock(&msm_dp_display->event_mutex);
-		return;
-	}
-
-	hpd_state =  msm_dp_display->hpd_state;
-
 	if (hpd_state == ST_DISPLAY_OFF) {
 		msm_dp_display_host_phy_init(msm_dp_display);
 		force_link_train = true;
@@ -1759,6 +1798,7 @@ void msm_dp_bridge_mode_set(struct drm_bridge *drm_bridge,
 	struct msm_dp_display_private *msm_dp_display;
 	struct msm_dp_panel *msm_dp_panel;
 	struct msm_dp_display_mode *msm_dp_mode;
+	int rc;
 
 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
 	msm_dp_panel = msm_dp_display->panel;
@@ -1789,6 +1829,10 @@ void msm_dp_bridge_mode_set(struct drm_bridge *drm_bridge,
 	/* populate wide_bus_support to different layers */
 	msm_dp_display->ctrl->wide_bus_en =
 		msm_dp_mode->out_fmt_is_yuv_420 ? false : msm_dp_display->wide_bus_supported;
+
+	rc = msm_dp_panel_init_panel_info(msm_dp_display->panel);
+	if (rc)
+		DRM_ERROR("Failed to perform a mode set, rc=%d\n", rc);
 }
 
 void msm_dp_bridge_hpd_enable(struct drm_bridge *bridge)

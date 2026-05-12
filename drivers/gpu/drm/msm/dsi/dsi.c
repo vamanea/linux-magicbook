@@ -17,6 +17,15 @@ struct drm_dsc_config *msm_dsi_get_dsc_config(struct msm_dsi *msm_dsi)
 	return msm_dsi_host_get_dsc_config(msm_dsi->host);
 }
 
+enum msm_mode_dsc_cfg msm_dsi_get_mode_dsc_cfg(struct msm_dsi *msm_dsi,
+			const struct drm_display_mode *mode)
+{
+	if (msm_dsi_get_dsc_config(msm_dsi))
+		return MSM_MODE_DSC_REQUIRED;
+
+	return MSM_MODE_DSC_UNAVAILABLE;
+}
+
 bool msm_dsi_wide_bus_enabled(struct msm_dsi *msm_dsi)
 {
 	return msm_dsi_host_is_wide_bus_enabled(msm_dsi->host);

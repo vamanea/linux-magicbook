@@ -312,6 +312,8 @@ bool msm_dsi_is_bonded_dsi(struct msm_dsi *msm_dsi);
 bool msm_dsi_is_master_dsi(struct msm_dsi *msm_dsi);
 bool msm_dsi_wide_bus_enabled(struct msm_dsi *msm_dsi);
 struct drm_dsc_config *msm_dsi_get_dsc_config(struct msm_dsi *msm_dsi);
+enum msm_mode_dsc_cfg msm_dsi_get_mode_dsc_cfg(struct msm_dsi *msm_dsi,
+			const struct drm_display_mode *mode);
 const char *msm_dsi_get_te_source(struct msm_dsi *msm_dsi);
 #else
 static inline void __init msm_dsi_register(void)
@@ -351,6 +353,12 @@ static inline struct drm_dsc_config *msm_dsi_get_dsc_config(struct msm_dsi *msm_
 	return NULL;
 }
 
+static inline enum msm_mode_dsc_cfg msm_dsi_get_mode_dsc_cfg(struct msm_dsi *msm_dsi,
+			const struct drm_display_mode *mode)
+{
+	return 0;
+}
+
 static inline const char *msm_dsi_get_te_source(struct msm_dsi *msm_dsi)
 {
 	return NULL;
@@ -369,6 +377,10 @@ bool msm_dp_is_yuv_420_enabled(const struct msm_dp *dp_display,
 bool msm_dp_needs_periph_flush(const struct msm_dp *dp_display,
 			       const struct drm_display_mode *mode);
 bool msm_dp_wide_bus_available(const struct msm_dp *dp_display);
+struct drm_dsc_config *msm_dp_get_dsc_config(struct msm_dp *msm_dp);
+enum msm_mode_dsc_cfg msm_dp_get_mode_dsc_cfg(struct msm_dp *msm_dp,
+			const struct drm_display_mode *mode);
+void msm_dp_set_dsc_enable(struct msm_dp *msm_dp, int num_dsc);
 u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display);
 u32 msm_dp_dsc_get_pclk_per_line(const struct msm_dp *dp_display);
 
@@ -407,6 +419,21 @@ static inline bool msm_dp_needs_periph_flush(const struct msm_dp *dp_display,
 static inline bool msm_dp_wide_bus_available(const struct msm_dp *dp_display)
 {
 	return false;
+}
+
+static inline struct drm_dsc_config *msm_dp_get_dsc_config(struct msm_dp *msm_dp)
+{
+	return NULL;
+}
+
+static inline enum msm_mode_dsc_cfg msm_dp_get_mode_dsc_cfg(struct msm_dp *msm_dp,
+			const struct drm_display_mode *mode)
+{
+	return 0;
+}
+
+static inline void msm_dp_set_dsc_enable(struct msm_dp *msm_dp, int num_dsc)
+{
 }
 
 static inline u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display)
