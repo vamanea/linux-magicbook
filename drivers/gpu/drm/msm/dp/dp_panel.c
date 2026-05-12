@@ -656,14 +656,6 @@ void msm_dp_panel_tpg_config(struct msm_dp_panel *msm_dp_panel, bool enable)
 	msm_dp_panel_tpg_enable(msm_dp_panel, &panel->msm_dp_panel.msm_dp_mode.drm_mode);
 }
 
-void msm_dp_panel_clear_dsc_dto(struct msm_dp_panel *msm_dp_panel)
-{
-	struct msm_dp_panel_private *panel =
-		container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
-
-	msm_dp_write_p0(panel, MMSS_DP_DSC_DTO, 0x0);
-}
-
 static void msm_dp_panel_send_vsc_sdp(struct msm_dp_panel_private *panel, struct dp_sdp *vsc_sdp)
 {
 	u32 header[2];
@@ -1192,6 +1184,101 @@ int msm_dp_panel_init_panel_info(struct msm_dp_panel *msm_dp_panel)
 	}
 
 	return 0;
+}
+
+u8 msm_dp_panel_get_colorimetry_config(struct msm_dp_panel *msm_dp_panel)
+{
+	u8 colorimetry;
+	u32 colorspace;
+	u32 cc;
+	struct msm_dp_panel_private *panel;
+
+	panel = container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
+
+	cc = msm_dp_link_get_colorimetry_config(panel->link);
+	/*
+	 * If there is a non-zero value then compliance test-case
+	 * is going on, otherwise we can honor the colorspace setting
+	 */
+	if (cc)
+		return cc;
+
+	colorspace = msm_dp_panel->connector->state->colorspace;
+	switch (colorspace) {
+	case DRM_MODE_COLORIMETRY_DCI_P3_RGB_D65:
+	case DRM_MODE_COLORIMETRY_DCI_P3_RGB_THEATER:
+		colorimetry = 0x7;
+		break;
+	case DRM_MODE_COLORIMETRY_RGB_WIDE_FIXED:
+		colorimetry = 0x3;
+		break;
+	case DRM_MODE_COLORIMETRY_RGB_WIDE_FLOAT:
+		colorimetry = 0xb;
+		break;
+	case DRM_MODE_COLORIMETRY_OPRGB:
+		colorimetry = 0xc;
+		break;
+	default:
+		colorimetry = 0;
+	}
+
+	return colorimetry;
+}
+void msm_dp_panel_config_dsc_dto(struct msm_dp_panel *msm_dp_panel, bool enable)
+{
+	struct msm_dp_panel_private *panel;
+	struct msm_dp_dsc_cfg *msm_dp_dsc;
+	struct msm_dp_display_mode_cfg *mode_cfg;
+	u32 reg = 0;
+
+	bool dto_en = enable;
+	u32 dto_n;
+	u32 dto_d;
+	u32 dto_count = 0;
+
+	if (!msm_dp_panel) {
+		DRM_ERROR("invalid input\n");
+		return;
+	}
+
+	panel = container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
+
+	if (dto_en) {
+		msm_dp_dsc = &msm_dp_panel->msm_dp_mode.msm_dp_dsc;
+		mode_cfg = &msm_dp_panel->msm_dp_mode.mode_cfg;
+
+		dto_count = msm_dp_dsc->pclk_per_line;
+		msm_dp_panel_get_dto_params(mode_cfg->bpp, mode_cfg->bpp / MSM_DP_DSC_COMP_RATIO, &dto_n, &dto_d);
+
+		msm_dp_read_p0(panel, MMSS_DP_DSC_DTO);
+		reg |= BIT(0);
+		reg |= BIT(3);
+		reg |= (dto_n << 8);
+		reg |= (dto_d << 16);
+	}
+	msm_dp_write_p0(panel, MMSS_DP_DSC_DTO_COUNT, dto_count);
+	msm_dp_write_p0(panel, MMSS_DP_DSC_DTO, reg);
+}
+
+void msm_dp_panel_override_ack_dto(struct msm_dp_panel *msm_dp_panel, bool not_ack)
+{
+	struct msm_dp_panel_private *panel;
+	u32 dsc_dto;
+
+	if (!msm_dp_panel) {
+		DRM_ERROR("invalid input\n");
+		return;
+	}
+
+	panel = container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
+
+	dsc_dto = msm_dp_read_p0(panel, MMSS_DP_DSC_DTO);
+	if (not_ack)
+		dsc_dto &= ~BIT(1);
+	else
+		dsc_dto = BIT(1);
+
+	msm_dp_write_p0(panel, MMSS_DP_DSC_DTO, dsc_dto);
 }
 
 struct msm_dp_panel *msm_dp_panel_get(struct device *dev, struct drm_dp_aux *aux,

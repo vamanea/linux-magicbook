@@ -101,10 +101,40 @@ int msm_dp_panel_get_modes(struct msm_dp_panel *msm_dp_panel,
 void msm_dp_panel_handle_sink_request(struct msm_dp_panel *msm_dp_panel);
 void msm_dp_panel_tpg_config(struct msm_dp_panel *msm_dp_panel, bool enable);
 
-void msm_dp_panel_clear_dsc_dto(struct msm_dp_panel *msm_dp_panel);
+u8 msm_dp_panel_get_colorimetry_config(struct msm_dp_panel *msm_dp_panel);
+void msm_dp_panel_config_dsc_dto(struct msm_dp_panel *msm_dp_panel, bool enable);
+void msm_dp_panel_override_ack_dto(struct msm_dp_panel *msm_dp_panel, bool not_ack);
 
 void msm_dp_panel_enable_vsc_sdp(struct msm_dp_panel *msm_dp_panel, struct dp_sdp *vsc_sdp);
 void msm_dp_panel_disable_vsc_sdp(struct msm_dp_panel *msm_dp_panel);
+
+/**
+ * msm_dp_panel_get_dto_params() - get numerator and denominator for dsc bpp config
+ * @src_bpp: uncompressed bits per pixel
+ * @tgt_bpp: compressed bits per pixel
+ * @num: returning numerator
+ * @denom: returning denominator
+ */
+static inline void msm_dp_panel_get_dto_params(u32 src_bpp, u32 tgt_bpp, u32 *num, u32 *denom)
+{
+	if ((tgt_bpp == 12) && (src_bpp == 24)) {
+		*num = 1;
+		*denom = 2;
+	} else if ((tgt_bpp == 15) && (src_bpp == 30)) {
+		*num = 5;
+		*denom = 8;
+	} else if ((tgt_bpp == 8) && ((src_bpp == 24) || (src_bpp == 30))) {
+		*num = 1;
+		*denom = 3;
+	} else if ((tgt_bpp == 10) && (src_bpp == 30)) {
+		*num = 5;
+		*denom = 12;
+	} else {
+		DRM_ERROR("dto params not found for sbpp=%d tbpp=%d\n", src_bpp, tgt_bpp);
+		*num = 0;
+		*denom = 1;
+	}
+}
 
 /**
  * is_link_rate_valid() - validates the link rate
