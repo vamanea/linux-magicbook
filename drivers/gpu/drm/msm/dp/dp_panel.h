@@ -25,9 +25,25 @@ struct msm_dp_display_mode_cfg {
 	enum msm_mode_dsc_cfg dsc;
 };
 
+/**
+ * struct msm_dp_dsc_cfg - defines dsc configuration
+ * @slice_per_pkt:           Number of slices per packet.
+ * @bytes_per_pkt:           Number of bytes in DSI packet
+ * @eol_byte_num:            Valid bytes at the end of line.
+ * @pclk_per_line:           Compressed width.
+ */
+struct msm_dp_dsc_cfg {
+	u32 slice_per_pkt;
+	u32 bytes_per_pkt;
+	u32 eol_byte_num;
+	u32 pclk_per_line;
+};
+
 struct msm_dp_display_mode {
 	struct drm_display_mode drm_mode;
 	struct msm_dp_display_mode_cfg mode_cfg;
+	struct drm_dsc_config drm_dsc;
+	struct msm_dp_dsc_cfg msm_dp_dsc;
 	u32 h_active_low;
 	u32 v_active_low;
 	bool out_fmt_is_yuv_420;
@@ -50,11 +66,13 @@ struct msm_dp_panel_dsc {
 	bool block_pred_en;
 	u8 bpc[3];
 	bool enabled;
+	u32 num_dsc;
 };
 
 struct msm_dp_panel {
 	/* dpcd raw data */
 	u8 dpcd[DP_RECEIVER_CAP_SIZE];
+	u8 dsc_dpcd[DP_DSC_RECEIVER_CAP_SIZE];
 	u8 downstream_ports[DP_MAX_DOWNSTREAM_PORTS];
 
 	struct msm_dp_link_info link_info;
