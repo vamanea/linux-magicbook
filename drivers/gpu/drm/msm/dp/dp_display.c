@@ -15,6 +15,7 @@
 #include <drm/display/drm_dp_aux_bus.h>
 #include <drm/display/drm_hdmi_audio_helper.h>
 #include <drm/drm_edid.h>
+#include <drm/drm_fixed.h>
 
 #include "msm_drv.h"
 #include "msm_kms.h"
@@ -1527,6 +1528,72 @@ bool msm_dp_wide_bus_available(const struct msm_dp *msm_dp_display)
 		return false;
 
 	return dp->wide_bus_supported;
+}
+
+u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display)
+{
+	struct msm_dp_display_private *dp;
+
+	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	struct msm_dp_display_mode *msm_dp_mode = &dp->panel->msm_dp_mode;
+	struct drm_dsc_config *drm_dsc = &msm_dp_mode->drm_dsc;
+	struct msm_dp_dsc_cfg *msm_dp_dsc = &msm_dp_mode->msm_dp_dsc;
+	struct msm_dp_display_mode_cfg *mode_cfg = &msm_dp_mode->mode_cfg;
+	unsigned int dto_n = 0, dto_d = 0, remainder;
+	int ack_required, last_few_ack_required, accum_ack;
+	int last_few_pclk, last_few_pclk_required;
+	int start, temp, line_width = drm_dsc->pic_width / 2;
+	s64 temp1_fp, temp2_fp;
+
+	msm_dp_panel_get_dto_params(mode_cfg->bpp, mode_cfg->bpp / MSM_DP_DSC_COMP_RATIO, &dto_n, &dto_d);
+
+	ack_required = msm_dp_dsc->pclk_per_line + 1;
+
+	/* number of pclk cycles left outside of the complete DTO set */
+	last_few_pclk = line_width % dto_d;
+
+	/* number of pclk cycles outside of the complete dto */
+	temp1_fp = drm_fixp_from_fraction(line_width, dto_d);
+	temp2_fp = drm_fixp_from_fraction(dto_n, 1);
+	temp1_fp = drm_fixp_mul(temp1_fp, temp2_fp);
+	temp = drm_fixp2int(temp1_fp);
+	last_few_ack_required = ack_required - temp;
+
+	/*
+	 * check how many more pclk is needed to
+	 * accommodate the last few ack required
+	 */
+	remainder = dto_n;
+	accum_ack = 0;
+	last_few_pclk_required = 0;
+	while (accum_ack < last_few_ack_required) {
+		last_few_pclk_required++;
+
+		if (remainder >= dto_n)
+			start = remainder;
+		else
+			start = remainder + dto_d;
+
+		remainder = start - dto_n;
+		if (remainder < dto_n)
+			accum_ack++;
+	}
+
+	/* if fewer pclk than required */
+	if (last_few_pclk < last_few_pclk_required)
+		return last_few_pclk_required - last_few_pclk;
+
+	return 0;
+}
+
+u32 msm_dp_dsc_get_pclk_per_line(const struct msm_dp *msm_dp_display)
+{
+	struct msm_dp_display_private *dp;
+
+	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+
+	return dp->panel->msm_dp_mode.msm_dp_dsc.pclk_per_line;
 }
 
 void msm_dp_display_debugfs_init(struct msm_dp *msm_dp_display, struct dentry *root, bool is_edp)

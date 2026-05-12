@@ -74,6 +74,10 @@ bool dpu_encoder_is_widebus_enabled(const struct drm_encoder *drm_enc);
 
 bool dpu_encoder_is_dsc_enabled(const struct drm_encoder *drm_enc);
 
+u32 dpu_encoder_get_extra_width(const struct drm_encoder *drm_enc);
+
+u32 dpu_encoder_get_pclk_per_line(const struct drm_encoder *drm_enc);
+
 int dpu_encoder_get_crc_values_cnt(const struct drm_encoder *drm_enc);
 
 void dpu_encoder_setup_misr(const struct drm_encoder *drm_encoder);

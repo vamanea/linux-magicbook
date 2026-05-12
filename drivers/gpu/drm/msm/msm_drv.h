@@ -369,6 +369,8 @@ bool msm_dp_is_yuv_420_enabled(const struct msm_dp *dp_display,
 bool msm_dp_needs_periph_flush(const struct msm_dp *dp_display,
 			       const struct drm_display_mode *mode);
 bool msm_dp_wide_bus_available(const struct msm_dp *dp_display);
+u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display);
+u32 msm_dp_dsc_get_pclk_per_line(const struct msm_dp *dp_display);
 
 #else
 static inline int __init msm_dp_register(void)
@@ -405,6 +407,16 @@ static inline bool msm_dp_needs_periph_flush(const struct msm_dp *dp_display,
 static inline bool msm_dp_wide_bus_available(const struct msm_dp *dp_display)
 {
 	return false;
+}
+
+static inline u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display)
+{
+	return 0;
+}
+
+static inline u32 msm_dp_dsc_get_pclk_per_line(const struct msm_dp *dp_display)
+{
+	return 0;
 }
 
 #endif
