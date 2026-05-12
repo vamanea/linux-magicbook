@@ -1078,6 +1078,9 @@ int msm_dp_panel_init_panel_info(struct msm_dp_panel *msm_dp_panel)
 				drm_mode->clock);
 	drm_dbg_dp(panel->drm_dev, "bpp = %d\n", mode_cfg->bpp);
 
+	mode_cfg->dsc = msm_dp_panel->dsc_cap.enabled ?
+				MSM_MODE_DSC_REQUIRED : MSM_MODE_DSC_UNAVAILABLE;
+
 	*mode_cfg = msm_dp_panel_get_mode_cfg(
 						      msm_dp_panel,
 						      mode_cfg->bpp,

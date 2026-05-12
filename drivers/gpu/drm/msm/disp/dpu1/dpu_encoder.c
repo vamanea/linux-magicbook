@@ -681,8 +681,35 @@ struct drm_dsc_config *dpu_encoder_get_dsc_config(struct drm_encoder *drm_enc)
 
 	if (dpu_enc->disp_info.intf_type == INTF_DSI)
 		return msm_dsi_get_dsc_config(priv->kms->dsi[index]);
+	else if (dpu_enc->disp_info.intf_type == INTF_DP)
+		return msm_dp_get_dsc_config(priv->kms->dp[index]);
 
 	return NULL;
+}
+
+static enum msm_mode_dsc_cfg dpu_encoder_get_mode_dsc_cfg(struct drm_encoder *drm_enc,
+			const struct drm_display_mode *mode)
+{
+	struct msm_drm_private *priv = drm_enc->dev->dev_private;
+	struct dpu_encoder_virt *dpu_enc = to_dpu_encoder_virt(drm_enc);
+	int index = dpu_enc->disp_info.h_tile_instance[0];
+
+	if (dpu_enc->disp_info.intf_type == INTF_DSI)
+		return msm_dsi_get_mode_dsc_cfg(priv->kms->dsi[index], mode);
+	else if (dpu_enc->disp_info.intf_type == INTF_DP)
+		return msm_dp_get_mode_dsc_cfg(priv->kms->dp[index], mode);
+
+	return 0;
+}
+
+static void dpu_encoder_set_dsc_enable(struct drm_encoder *drm_enc, int num_dsc)
+{
+	struct msm_drm_private *priv = drm_enc->dev->dev_private;
+	struct dpu_encoder_virt *dpu_enc = to_dpu_encoder_virt(drm_enc);
+	int index = dpu_enc->disp_info.h_tile_instance[0];
+
+	if (dpu_enc->disp_info.intf_type == INTF_DP)
+		msm_dp_set_dsc_enable(priv->kms->dp[index], num_dsc);
 }
 
 void dpu_encoder_update_topology(struct drm_encoder *drm_enc,
@@ -697,7 +724,7 @@ void dpu_encoder_update_topology(struct drm_encoder *drm_enc,
 	struct drm_connector *connector;
 	struct drm_connector_state *conn_state;
 	struct drm_framebuffer *fb;
-	struct drm_dsc_config *dsc;
+	enum msm_mode_dsc_cfg dsc_cfg;
 
 	int i;
 
@@ -705,10 +732,10 @@ void dpu_encoder_update_topology(struct drm_encoder *drm_enc,
 		if (dpu_enc->phys_encs[i])
 			topology->num_intf++;
 
-	dsc = dpu_encoder_get_dsc_config(drm_enc);
+	dsc_cfg = dpu_encoder_get_mode_dsc_cfg(drm_enc, adj_mode);
 
 	/* We only support 2 DSC mode (with 2 LM and 1 INTF) */
-	if (dsc) {
+	if (dsc_cfg >= MSM_MODE_DSC_PREFERRED) {
 		/*
 		 * Use 2 DSC encoders, 2 layer mixers and 1 or 2 interfaces
 		 * when Display Stream Compression (DSC) is enabled,
@@ -1260,6 +1287,8 @@ static void dpu_encoder_virt_atomic_mode_set(struct drm_encoder *drm_enc,
 		dsc_mask |= BIT(dpu_enc->hw_dsc[i]->idx - DSC_0);
 	}
 
+	dpu_encoder_set_dsc_enable(drm_enc, num_dsc);
+
 	dpu_enc->dsc_mask = dsc_mask;
 
 	if ((dpu_enc->disp_info.intf_type == INTF_WB && conn_state->writeback_job) ||
@@ -1692,6 +1721,9 @@ static void _dpu_encoder_trigger_flush(struct drm_encoder *drm_enc,
 
 	if (extra_flush_bits && ctl->ops.update_pending_flush)
 		ctl->ops.update_pending_flush(ctl, extra_flush_bits);
+
+	if (ctl->ops.update_pending_flush_periph && dpu_encoder_needs_periph_flush(phys))
+		ctl->ops.update_pending_flush_periph(ctl, phys->hw_intf->idx);
 
 	ctl->ops.trigger_flush(ctl);
 
