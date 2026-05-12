@@ -304,6 +304,38 @@ bool dpu_encoder_is_dsc_enabled(const struct drm_encoder *drm_enc)
 }
 
 /**
+ * dpu_encoder_get_extra_width - get extra_width for the given encoder.
+ * @drm_enc:    Pointer to previously created drm encoder structure
+ */
+u32 dpu_encoder_get_extra_width(const struct drm_encoder *drm_enc)
+{
+	struct msm_drm_private *priv = drm_enc->dev->dev_private;
+	struct dpu_encoder_virt *dpu_enc = to_dpu_encoder_virt(drm_enc);
+	int index = dpu_enc->disp_info.h_tile_instance[0];
+
+	if (dpu_enc->disp_info.intf_type == INTF_DP)
+		return msm_dp_dsc_get_extra_width(priv->kms->dp[index]);
+
+	return 0;
+}
+
+/**
+ * dpu_encoder_get_pclk_per_line - get pclk_per_line for the given encoder.
+ * @drm_enc:    Pointer to previously created drm encoder structure
+ */
+u32 dpu_encoder_get_pclk_per_line(const struct drm_encoder *drm_enc)
+{
+	struct msm_drm_private *priv = drm_enc->dev->dev_private;
+	struct dpu_encoder_virt *dpu_enc = to_dpu_encoder_virt(drm_enc);
+	int index = dpu_enc->disp_info.h_tile_instance[0];
+
+	if (dpu_enc->disp_info.intf_type == INTF_DP)
+		return msm_dp_dsc_get_pclk_per_line(priv->kms->dp[index]);
+
+	return 0;
+}
+
+/**
  * dpu_encoder_get_crc_values_cnt - get number of physical encoders contained
  *	in virtual encoder that can collect CRC values
  * @drm_enc:    Pointer to previously created drm encoder structure

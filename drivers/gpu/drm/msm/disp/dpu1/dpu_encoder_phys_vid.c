@@ -10,6 +10,7 @@
 #include "dpu_formats.h"
 #include "dpu_trace.h"
 #include "disp/msm_disp_snapshot.h"
+#include "msm_dsc_helper.h"
 
 #include <drm/display/drm_dsc_helper.h>
 #include <drm/drm_managed.h>
@@ -113,12 +114,20 @@ static void drm_mode_to_intf_timing_params(
 	 * for DP, divide the horizonal parameters by 2 when
 	 * widebus is enabled
 	 */
-	if (phys_enc->hw_intf->cap->type == INTF_DP && timing->wide_bus_en) {
+	if (phys_enc->hw_intf->cap->type == INTF_DP &&
+				(timing->wide_bus_en || timing->compression_en)) {
 		timing->width = timing->width >> 1;
 		timing->xres = timing->xres >> 1;
 		timing->h_back_porch = timing->h_back_porch >> 1;
 		timing->h_front_porch = timing->h_front_porch >> 1;
 		timing->hsync_pulse_width = timing->hsync_pulse_width >> 1;
+
+		if (timing->compression_en) {
+			u32 extra_width = dpu_encoder_get_extra_width(phys_enc->parent);
+			timing->pclk_per_line = dpu_encoder_get_pclk_per_line(phys_enc->parent);
+			timing->width += extra_width;
+			timing->h_back_porch += extra_width;
+		}
 	}
 
 	/*
@@ -136,6 +145,7 @@ static void drm_mode_to_intf_timing_params(
 		timing->width = timing->width * drm_dsc_get_bpp_int(dsc) /
 				(dsc->bits_per_component * 3);
 		timing->xres = timing->width;
+		timing->dce_bytes_per_line = msm_dsc_get_bytes_per_line(dsc);
 	}
 }
 
