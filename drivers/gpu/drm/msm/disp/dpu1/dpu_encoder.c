@@ -1339,28 +1339,70 @@ static void dpu_encoder_virt_atomic_mode_set(struct drm_encoder *drm_enc,
 }
 
 static u32
-dpu_encoder_dsc_initial_line_calc(struct drm_dsc_config *dsc,
-				  u32 enc_ip_width)
+dpu_encoder_dsc_initial_line_calc(struct drm_dsc_config *drm_dsc, u32 dsc_cmn_mode)
 {
-	int ssm_delay, total_pixels, soft_slice_per_enc;
+	u32 num_active_ss_per_enc;
+	u32 max_ssm_delay, max_se_size, max_muxword_size;
+	u32 compress_bpp_group, obuf_latency, input_ssm_out_latency;
+	u32 base_hs_latency, chunk_bits, ob_data_width;
+	u32 output_rate_extra_budget_bits, multi_hs_extra_budget_bits;
+	u32 multi_hs_extra_latency,  mux_word_size;
+	u32 ob_data_width_4comps, ob_data_width_3comps;
+	u32 output_rate_ratio_complement, container_slice_width;
+	u32 rtl_num_components;
+	bool multi_hs_c, multi_hs_d;
 
-	soft_slice_per_enc = enc_ip_width / dsc->slice_width;
+	u32 bpc = drm_dsc->bits_per_component;
+	u32 bpp = drm_dsc->bits_per_pixel >> 4;
+	bool native_422 = drm_dsc->native_422;
+	bool native_420 = drm_dsc->native_420;
 
-	/*
-	 * minimum number of initial line pixels is a sum of:
-	 * 1. sub-stream multiplexer delay (83 groups for 8bpc,
-	 *    91 for 10 bpc) * 3
-	 * 2. for two soft slice cases, add extra sub-stream multiplexer * 3
-	 * 3. the initial xmit delay
-	 * 4. total pipeline delay through the "lock step" of encoder (47)
-	 * 5. 6 additional pixels as the output of the rate buffer is
-	 *    48 bits wide
-	 */
-	ssm_delay = ((dsc->bits_per_component < 10) ? 84 : 92);
-	total_pixels = ssm_delay * 3 + dsc->initial_xmit_delay + 47;
-	if (soft_slice_per_enc > 1)
-		total_pixels += (ssm_delay * 3);
-	return DIV_ROUND_UP(total_pixels, dsc->slice_width);
+	/* Hardent core config */
+	bool multiplex_mode_enable = 0, split_panel_enable = 0;
+	u32 rtl_max_bpc = 10, rtl_output_data_width = 64;
+	u32 pipeline_latency = 28;
+
+	if (dsc_cmn_mode & DSC_MODE_MULTIPLEX)
+		multiplex_mode_enable = true;
+	if (dsc_cmn_mode & DSC_MODE_SPLIT_PANEL)
+		split_panel_enable = true;
+
+	num_active_ss_per_enc = drm_dsc->slice_count;
+	if (multiplex_mode_enable)
+		num_active_ss_per_enc >>= 1;
+	container_slice_width = (native_422 ?
+			drm_dsc->slice_width / 2 : drm_dsc->slice_width);
+	max_muxword_size = rtl_max_bpc >= 12 ? 64 : 48;
+	max_se_size = 4 * (rtl_max_bpc + 1);
+	max_ssm_delay = max_se_size + max_muxword_size - 1;
+	mux_word_size = bpc >= 12 ? 64 : 48;
+	compress_bpp_group = native_422 ? 2 * bpp : bpp;
+	input_ssm_out_latency = pipeline_latency + 3 * (max_ssm_delay + 2)
+			* num_active_ss_per_enc;
+	rtl_num_components = native_420 || native_422 ? 4 : 3;
+	ob_data_width_4comps = rtl_output_data_width >= 2 * max_muxword_size ?
+			rtl_output_data_width : 2 * rtl_output_data_width;
+	ob_data_width_3comps = rtl_output_data_width >= max_muxword_size ?
+			rtl_output_data_width : 2 * rtl_output_data_width;
+	ob_data_width = rtl_num_components == 4 ?
+			ob_data_width_4comps : ob_data_width_3comps;
+	obuf_latency = DIV_ROUND_UP(9 * ob_data_width + mux_word_size,
+			compress_bpp_group) + 1;
+	base_hs_latency = drm_dsc->initial_xmit_delay +
+		input_ssm_out_latency + obuf_latency;
+	chunk_bits = 8 * drm_dsc->slice_chunk_size;
+	output_rate_ratio_complement = ob_data_width - compress_bpp_group;
+	output_rate_extra_budget_bits =
+			(output_rate_ratio_complement * chunk_bits) >>
+			(ob_data_width == 128 ? 7 : 6);
+	multi_hs_c = split_panel_enable && multiplex_mode_enable;
+	multi_hs_d = num_active_ss_per_enc > 1 && ob_data_width > compress_bpp_group;
+	multi_hs_extra_budget_bits = multi_hs_c || multi_hs_d ? chunk_bits :
+			output_rate_extra_budget_bits;
+	multi_hs_extra_latency = DIV_ROUND_UP(multi_hs_extra_budget_bits,
+			compress_bpp_group);
+	return DIV_ROUND_UP(base_hs_latency +
+			multi_hs_extra_latency, container_slice_width);
 }
 
 static void dpu_encoder_dsc_pipe_cfg(struct dpu_hw_ctl *ctl,
@@ -1396,10 +1438,7 @@ static void dpu_encoder_prep_dsc(struct dpu_encoder_virt *dpu_enc,
 	struct dpu_hw_ctl *ctl = enc_master->hw_ctl;
 	struct dpu_hw_dsc *hw_dsc[MAX_CHANNELS_PER_ENC];
 	struct dpu_hw_pingpong *hw_pp[MAX_CHANNELS_PER_ENC];
-	int this_frame_slices;
-	int intf_ip_w, enc_ip_w;
 	int dsc_common_mode;
-	int pic_width;
 	u32 initial_lines;
 	int num_dsc = 0;
 	int i;
@@ -1414,8 +1453,6 @@ static void dpu_encoder_prep_dsc(struct dpu_encoder_virt *dpu_enc,
 		num_dsc++;
 	}
 
-	pic_width = dsc->pic_width;
-
 	dsc_common_mode = 0;
 	if (num_dsc > 1)
 		dsc_common_mode |= DSC_MODE_SPLIT_PANEL;
@@ -1424,11 +1461,7 @@ static void dpu_encoder_prep_dsc(struct dpu_encoder_virt *dpu_enc,
 	if (enc_master->intf_mode == INTF_MODE_VIDEO)
 		dsc_common_mode |= DSC_MODE_VIDEO;
 
-	this_frame_slices = pic_width / dsc->slice_width;
-	intf_ip_w = this_frame_slices * dsc->slice_width;
-
-	enc_ip_w = intf_ip_w / num_dsc;
-	initial_lines = dpu_encoder_dsc_initial_line_calc(dsc, enc_ip_w);
+	initial_lines = dpu_encoder_dsc_initial_line_calc(dsc, dsc_common_mode);
 
 	for (i = 0; i < num_dsc; i++)
 		dpu_encoder_dsc_pipe_cfg(ctl, hw_dsc[i], hw_pp[i],
