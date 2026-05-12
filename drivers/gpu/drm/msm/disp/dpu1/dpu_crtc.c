@@ -1408,8 +1408,8 @@ static struct msm_display_topology dpu_crtc_get_topology(
 
 	if (topology.num_intf == 2 && !topology.cwb_enabled)
 		topology.num_lm = 2;
-	else if (topology.num_dsc == 2)
-		topology.num_lm = 2;
+	else if (topology.num_dsc)
+		topology.num_lm = topology.num_dsc;
 	else if (dpu_kms->catalog->caps->has_3d_merge)
 		topology.num_lm = (mode->hdisplay > MAX_HDISPLAY_SPLIT) ? 2 : 1;
 	else
