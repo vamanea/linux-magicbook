@@ -200,8 +200,6 @@ struct dpu_crtc {
  * @new_perf: new performance state being requested
  * @num_mixers    : Number of mixers in use
  * @mixers        : List of active mixers
- * @num_ctls      : Number of ctl paths in use
- * @hw_ctls       : List of active ctl paths
  * @crc_source    : CRC source
  * @crc_frame_skip_count: Number of frames skipped before getting CRC
  */
@@ -219,9 +217,6 @@ struct dpu_crtc_state {
 	/* HW Resources reserved for the crtc */
 	u32 num_mixers;
 	struct dpu_crtc_mixer mixers[CRTC_DUAL_MIXERS];
-
-	u32 num_ctls;
-	struct dpu_hw_ctl *hw_ctls[CRTC_DUAL_MIXERS];
 
 	enum dpu_crtc_crc_source crc_source;
 	int crc_frame_skip_count;
