@@ -138,6 +138,7 @@ msm-$(CONFIG_DRM_MSM_KMS_FBDEV) += msm_fbdev.o
 
 msm-display-$(CONFIG_DRM_MSM_DP)+= dp/dp_aux.o \
 	dp/dp_ctrl.o \
+	dp/dp_tu_calc.o \
 	dp/dp_debug.o \
 	dp/dp_display.o \
 	dp/dp_drm.o \
