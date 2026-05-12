@@ -526,25 +526,28 @@ static int _dpu_rm_dsc_alloc(struct dpu_rm *rm,
 	int dsc_idx;
 	int ret;
 
-	for (dsc_idx = 0; dsc_idx < ARRAY_SIZE(rm->dsc_blks) &&
+	pp_idx = _dpu_rm_pingpong_next_index(global_state, pp_idx, crtc_id);
+
+	for (dsc_idx = pp_idx & 0x01; dsc_idx < ARRAY_SIZE(rm->dsc_blks) &&
 	     num_dsc < top->num_dsc; dsc_idx++) {
+		if (pp_idx < 0)
+			return -ENAVAIL;
+
 		if (!rm->dsc_blks[dsc_idx])
 			continue;
 
 		if (reserved_by_other(global_state->dsc_to_crtc_id, dsc_idx, crtc_id))
 			continue;
 
-		pp_idx = _dpu_rm_pingpong_next_index(global_state, pp_idx, crtc_id);
-		if (pp_idx < 0)
-			return -ENAVAIL;
-
 		ret = _dpu_rm_pingpong_dsc_check(dsc_idx, pp_idx);
 		if (ret)
-			return -ENAVAIL;
+			continue;
 
 		global_state->dsc_to_crtc_id[dsc_idx] = crtc_id;
 		num_dsc++;
 		pp_idx++;
+
+		pp_idx = _dpu_rm_pingpong_next_index(global_state, pp_idx, crtc_id);
 	}
 
 	if (num_dsc < top->num_dsc) {
