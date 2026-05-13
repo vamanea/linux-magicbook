@@ -11,7 +11,7 @@
 #include "dp_link.h"
 
 struct msm_dp_ctrl {
-	bool wide_bus_en;
+	u8 _dummy;
 };
 
 struct phy;
