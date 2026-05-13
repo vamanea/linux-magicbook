@@ -784,7 +784,7 @@ static int msm_dp_panel_setup_vsc_sdp_yuv_420(struct msm_dp_panel *msm_dp_panel)
 	return 0;
 }
 
-int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en)
+int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel)
 {
 	u32 data, total_ver, total_hor;
 	struct msm_dp_panel_private *panel;
@@ -796,7 +796,7 @@ int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en)
 	u32 reg;
 
 	panel = container_of(msm_dp_panel, struct msm_dp_panel_private, msm_dp_panel);
-	drm_mode = &panel->msm_dp_panel.msm_dp_mode.drm_mode;
+	drm_mode = &msm_dp_panel->msm_dp_mode.drm_mode;
 
 	drm_dbg_dp(panel->drm_dev, "width=%d hporch= %d %d %d\n",
 		drm_mode->hdisplay, drm_mode->htotal - drm_mode->hsync_end,
@@ -826,9 +826,9 @@ int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en)
 
 	data = drm_mode->vsync_end - drm_mode->vsync_start;
 	data <<= 16;
-	data |= (panel->msm_dp_panel.msm_dp_mode.v_active_low << 31);
+	data |= (msm_dp_panel->msm_dp_mode.v_active_low << 31);
 	data |= drm_mode->hsync_end - drm_mode->hsync_start;
-	data |= (panel->msm_dp_panel.msm_dp_mode.h_active_low << 15);
+	data |= (msm_dp_panel->msm_dp_mode.h_active_low << 15);
 
 	width_blanking = data;
 
@@ -844,12 +844,13 @@ int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en)
 	msm_dp_write_link(panel, REG_DP_ACTIVE_HOR_VER, msm_dp_active);
 
 	reg = msm_dp_read_p0(panel, MMSS_DP_INTF_CONFIG);
-	if (wide_bus_en)
+	if (msm_dp_panel->msm_dp_mode.wide_bus_en)
 		reg |= DP_INTF_CONFIG_DATABUS_WIDEN;
 	else
 		reg &= ~DP_INTF_CONFIG_DATABUS_WIDEN;
 
-	drm_dbg_dp(panel->drm_dev, "wide_bus_en=%d reg=%#x\n", wide_bus_en, reg);
+	drm_dbg_dp(panel->drm_dev, "wide_bus_en=%d reg=%#x\n",
+				msm_dp_panel->msm_dp_mode.wide_bus_en, reg);
 
 	msm_dp_write_p0(panel, MMSS_DP_INTF_CONFIG, reg);
 

@@ -1827,7 +1827,7 @@ void msm_dp_bridge_mode_set(struct drm_bridge *drm_bridge,
 		msm_dp_panel->vsc_sdp_supported;
 
 	/* populate wide_bus_support to different layers */
-	msm_dp_display->ctrl->wide_bus_en =
+	msm_dp_mode->wide_bus_en =
 		msm_dp_mode->out_fmt_is_yuv_420 ? false : msm_dp_display->wide_bus_supported;
 
 	rc = msm_dp_panel_init_panel_info(msm_dp_display->panel);

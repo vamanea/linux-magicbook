@@ -47,6 +47,7 @@ struct msm_dp_display_mode {
 	u32 h_active_low;
 	u32 v_active_low;
 	bool out_fmt_is_yuv_420;
+	bool wide_bus_en;
 };
 
 struct msm_dp_panel_psr {
@@ -91,7 +92,7 @@ struct msm_dp_panel {
 
 int msm_dp_panel_init_panel_info(struct msm_dp_panel *msm_dp_panel);
 int msm_dp_panel_deinit(struct msm_dp_panel *msm_dp_panel);
-int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel, bool wide_bus_en);
+int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel);
 int msm_dp_panel_read_sink_caps(struct msm_dp_panel *msm_dp_panel,
 		struct drm_connector *connector);
 struct msm_dp_display_mode_cfg msm_dp_panel_get_mode_cfg(struct msm_dp_panel *msm_dp_panel,
