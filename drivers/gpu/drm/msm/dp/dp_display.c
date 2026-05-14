@@ -923,7 +923,7 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 	u32 mode_bpp;
 	struct msm_dp *dp;
 	int mode_pclk_khz = mode->clock;
-	struct msm_dp_display_mode_cfg mode_cfg;
+	struct msm_dp_display_mode msm_dp_mode = {0};
 
 	dp = to_dp_bridge(bridge)->msm_dp_display;
 
@@ -946,14 +946,17 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
 	if (!mode_bpp)
 		mode_bpp = default_bpp;
 
+	drm_mode_copy(&msm_dp_mode.drm_mode, mode);
+
 	/* Need to use clock not-scaled by yuv/wide-bus for link rate check */
-	mode_cfg = msm_dp_panel_get_mode_cfg(msm_dp_display->panel,
+	msm_dp_mode.mode_cfg = msm_dp_panel_get_mode_cfg(msm_dp_display->panel,
 			mode_bpp,
 			msm_dp_display->panel->dsc_cap.supported ?
 					MSM_MODE_DSC_OPTIONAL : MSM_MODE_DSC_UNAVAILABLE,
-			mode->clock);
+			&msm_dp_mode,
+			MSM_DP_NUM_DSC_MAX);
 
-	if (mode_cfg.bpp == MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE)
+	if (msm_dp_mode.mode_cfg.bpp == MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE)
 		return MODE_BAD;
 
 	return MODE_OK;
@@ -1552,7 +1555,7 @@ enum msm_mode_dsc_cfg msm_dp_get_mode_dsc_cfg(struct msm_dp *msm_dp_display,
 	const u32 num_components = 3, default_bpp = 24;
 	struct msm_dp_display_private *dp;
 	u32 mode_bpp;
-	struct msm_dp_display_mode_cfg mode_cfg;
+	struct msm_dp_display_mode msm_dp_mode = {0};
 
 	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
 
@@ -1563,9 +1566,12 @@ enum msm_mode_dsc_cfg msm_dp_get_mode_dsc_cfg(struct msm_dp *msm_dp_display,
 	if (!mode_bpp)
 		mode_bpp = default_bpp;
 
-	mode_cfg = msm_dp_panel_get_mode_cfg(dp->panel,
-			mode_bpp, MSM_MODE_DSC_OPTIONAL, mode->clock);
-	return mode_cfg.dsc;
+	drm_mode_copy(&msm_dp_mode.drm_mode, mode);
+
+	msm_dp_mode.mode_cfg = msm_dp_panel_get_mode_cfg(dp->panel,
+			mode_bpp, MSM_MODE_DSC_OPTIONAL, &msm_dp_mode,
+			MSM_DP_NUM_DSC_MAX);
+	return msm_dp_mode.mode_cfg.dsc;
 }
 
 void msm_dp_set_dsc_enable(struct msm_dp *msm_dp_display, int num_dsc)
@@ -1593,8 +1599,8 @@ u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display)
 	int start, temp, line_width = drm_dsc->pic_width / 2;
 	s64 temp1_fp, temp2_fp;
 
-	dto_n = dp->panel->dsc_cap.dto.dto_n;
-	dto_d = dp->panel->dsc_cap.dto.dto_d;
+	dto_n = msm_dp_dsc->dto.dto_n;
+	dto_d = msm_dp_dsc->dto.dto_d;
 
 	ack_required = msm_dp_dsc->pclk_per_line + 1;
 

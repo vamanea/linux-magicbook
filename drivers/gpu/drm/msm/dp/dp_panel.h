@@ -17,11 +17,20 @@ struct edid;
 
 #define MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE 0
 
+#define MSM_DP_NUM_DSC_MAX 2
+
 struct msm_dp_display_mode_cfg {
 	u8 bpp;
 	u8 tgt_bpp;
 	bool fec_available;
 	enum msm_mode_dsc_cfg dsc;
+};
+
+struct msm_dp_dto {
+	u8 src_bpp;
+	u8 tgt_bpp;
+	u8 dto_n;
+	u8 dto_d;
 };
 
 /**
@@ -36,6 +45,8 @@ struct msm_dp_dsc_cfg {
 	u32 bytes_per_pkt;
 	u32 eol_byte_num;
 	u32 pclk_per_line;
+	s64 dsc_overhead_fp;
+	struct msm_dp_dto dto;
 };
 
 struct msm_dp_display_mode {
@@ -59,13 +70,6 @@ struct msm_dp_panel_fec {
 	bool enabled;
 };
 
-struct msm_dp_dto {
-	u8 src_bpp;
-	u8 tgt_bpp;
-	u8 dto_n;
-	u8 dto_d;
-};
-
 struct msm_dp_panel_dsc {
 	bool supported;
 	u8 version_major;
@@ -74,7 +78,6 @@ struct msm_dp_panel_dsc {
 	u8 bpc[3];
 	bool enabled;
 	u32 num_dsc;
-	struct msm_dp_dto dto;
 };
 
 struct msm_dp_panel {
@@ -103,7 +106,9 @@ int msm_dp_panel_timing_cfg(struct msm_dp_panel *msm_dp_panel);
 int msm_dp_panel_read_sink_caps(struct msm_dp_panel *msm_dp_panel,
 		struct drm_connector *connector);
 struct msm_dp_display_mode_cfg msm_dp_panel_get_mode_cfg(struct msm_dp_panel *msm_dp_panel,
-			u32 mode_max_bpp, enum msm_mode_dsc_cfg dsc_cfg, u32 mode_pclk_khz);
+			u32 mode_max_bpp, enum msm_mode_dsc_cfg dsc_cfg,
+			struct msm_dp_display_mode *msm_dp_mode,
+			u8 num_dsc);
 int msm_dp_panel_get_modes(struct msm_dp_panel *msm_dp_panel,
 		struct drm_connector *connector);
 void msm_dp_panel_handle_sink_request(struct msm_dp_panel *msm_dp_panel);

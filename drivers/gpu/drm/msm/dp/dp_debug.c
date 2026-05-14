@@ -66,6 +66,8 @@ static int msm_dp_debug_show(struct seq_file *seq, void *p)
 			drm_mode->clock);
 	seq_printf(seq, "\t\tbpp = %d\n",
 			debug->panel->msm_dp_mode.mode_cfg.bpp);
+	seq_printf(seq, "\t\ttgt_bpp = %d\n",
+			debug->panel->msm_dp_mode.mode_cfg.tgt_bpp);
 	seq_printf(seq, "\t\tfec = %d\n",
 			debug->panel->msm_dp_mode.mode_cfg.fec_available);
 	seq_printf(seq, "\t\tdsc = %d\n",

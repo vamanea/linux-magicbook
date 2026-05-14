@@ -540,8 +540,8 @@ static void msm_dp_ctrl_calc_tu_parameters(struct msm_dp_ctrl_private *ctrl,
 	in.fec_en = ctrl->panel->fec_cap.enabled;
 	in.num_of_dsc_slices = ctrl->panel->msm_dp_mode.drm_dsc.slice_count;
 	in.compress_ratio = mult_frac(100,
-			ctrl->panel->dsc_cap.dto.src_bpp,
-			ctrl->panel->dsc_cap.dto.tgt_bpp);
+			ctrl->panel->msm_dp_mode.msm_dp_dsc.dto.src_bpp,
+			ctrl->panel->msm_dp_mode.msm_dp_dsc.dto.tgt_bpp);
 
 	msm_dp_ctrl_calc_tu(ctrl->drm_dev, &in, tu_table);
 }
