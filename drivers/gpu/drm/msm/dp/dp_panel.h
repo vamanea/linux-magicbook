@@ -15,12 +15,11 @@
 
 struct edid;
 
-#define MSM_DP_DSC_COMP_RATIO 3
-
 #define MSM_DP_DISPLAY_MODE_BPP_UNAVAILABLE 0
 
 struct msm_dp_display_mode_cfg {
-	u32 bpp;
+	u8 bpp;
+	u8 tgt_bpp;
 	bool fec_available;
 	enum msm_mode_dsc_cfg dsc;
 };
@@ -60,6 +59,13 @@ struct msm_dp_panel_fec {
 	bool enabled;
 };
 
+struct msm_dp_dto {
+	u8 src_bpp;
+	u8 tgt_bpp;
+	u8 dto_n;
+	u8 dto_d;
+};
+
 struct msm_dp_panel_dsc {
 	bool supported;
 	u8 version_major;
@@ -68,6 +74,7 @@ struct msm_dp_panel_dsc {
 	u8 bpc[3];
 	bool enabled;
 	u32 num_dsc;
+	struct msm_dp_dto dto;
 };
 
 struct msm_dp_panel {
@@ -108,34 +115,6 @@ void msm_dp_panel_override_ack_dto(struct msm_dp_panel *msm_dp_panel, bool not_a
 
 void msm_dp_panel_enable_vsc_sdp(struct msm_dp_panel *msm_dp_panel, struct dp_sdp *vsc_sdp);
 void msm_dp_panel_disable_vsc_sdp(struct msm_dp_panel *msm_dp_panel);
-
-/**
- * msm_dp_panel_get_dto_params() - get numerator and denominator for dsc bpp config
- * @src_bpp: uncompressed bits per pixel
- * @tgt_bpp: compressed bits per pixel
- * @num: returning numerator
- * @denom: returning denominator
- */
-static inline void msm_dp_panel_get_dto_params(u32 src_bpp, u32 tgt_bpp, u32 *num, u32 *denom)
-{
-	if ((tgt_bpp == 12) && (src_bpp == 24)) {
-		*num = 1;
-		*denom = 2;
-	} else if ((tgt_bpp == 15) && (src_bpp == 30)) {
-		*num = 5;
-		*denom = 8;
-	} else if ((tgt_bpp == 8) && ((src_bpp == 24) || (src_bpp == 30))) {
-		*num = 1;
-		*denom = 3;
-	} else if ((tgt_bpp == 10) && (src_bpp == 30)) {
-		*num = 5;
-		*denom = 12;
-	} else {
-		DRM_ERROR("dto params not found for sbpp=%d tbpp=%d\n", src_bpp, tgt_bpp);
-		*num = 0;
-		*denom = 1;
-	}
-}
 
 /**
  * is_link_rate_valid() - validates the link rate
