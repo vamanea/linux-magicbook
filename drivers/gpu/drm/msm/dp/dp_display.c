@@ -1587,14 +1587,14 @@ u32 msm_dp_dsc_get_extra_width(const struct msm_dp *msm_dp_display)
 	struct msm_dp_display_mode *msm_dp_mode = &dp->panel->msm_dp_mode;
 	struct drm_dsc_config *drm_dsc = &msm_dp_mode->drm_dsc;
 	struct msm_dp_dsc_cfg *msm_dp_dsc = &msm_dp_mode->msm_dp_dsc;
-	struct msm_dp_display_mode_cfg *mode_cfg = &msm_dp_mode->mode_cfg;
-	unsigned int dto_n = 0, dto_d = 0, remainder;
+	unsigned int dto_n, dto_d, remainder;
 	int ack_required, last_few_ack_required, accum_ack;
 	int last_few_pclk, last_few_pclk_required;
 	int start, temp, line_width = drm_dsc->pic_width / 2;
 	s64 temp1_fp, temp2_fp;
 
-	msm_dp_panel_get_dto_params(mode_cfg->bpp, mode_cfg->bpp / MSM_DP_DSC_COMP_RATIO, &dto_n, &dto_d);
+	dto_n = dp->panel->dsc_cap.dto.dto_n;
+	dto_d = dp->panel->dsc_cap.dto.dto_d;
 
 	ack_required = msm_dp_dsc->pclk_per_line + 1;
 
