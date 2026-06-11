@@ -2093,6 +2093,7 @@ static const struct edp_panel_entry edp_panels[] = {
 	EDP_PANEL_ENTRY('T', 'M', 'A', 0x0811, &delay_200_500_e80_d50, "TM140VDXP01-04"),
 	EDP_PANEL_ENTRY('T', 'M', 'A', 0x2094, &delay_200_500_e50_d100, "TL140VDMS03-01"),
 
+	EDP_PANEL_ENTRY('E', 'D', 'O', 0x4179, &delay_200_500_e50, "EDO.14"),
 	{ /* sentinal */ }
 };
 
