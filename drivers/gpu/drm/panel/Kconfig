@@ -1223,4 +1223,17 @@ config DRM_PANEL_XINPENG_XPP055C272
 	  Say Y here if you want to enable support for the Xinpeng
 	  XPP055C272 controller for 720x1280 LCD panels with MIPI/RGB/SPI
 	  system interfaces.
+
+config DRM_PANEL_EDO_EDO1455
+	tristate "EDO 14.55 eDP panel"
+	depends on OF
+	depends on BACKLIGHT_CLASS_DEVICE
+	depends on PM
+	select DRM_DISPLAY_DP_HELPER
+	select DRM_DISPLAY_HELPER
+	select DRM_DISPLAY_DP_AUX_BUS
+	help
+	  Say Y here if you want to enable support for the EDO 14.55
+	  eDP panel. This driver calls DSC disable and filters refresh
+	  rate for modes > 60Hz(not supported without DSC)
 endmenu

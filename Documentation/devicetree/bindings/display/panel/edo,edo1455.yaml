@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/panel/edo,edo1455.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: EDO 14.55 eDP Panel
+
+maintainers:
+  - Valentin Manea<valentin.manea@mrs.ro>
+
+description: |
+  The EDO EDO14.55 is a eDP panel with DSC capability. This driver
+  supports disabling DSC and filtering refresh rates > 60Hz.
+
+properties:
+  compatible:
+    const: edo,edo1455
+
+  power-supply:
+    description: Regulator for the panel power supply
+
+required:
+  - compatible
+
+additionalProperties: false
+
+examples:
+  - |
+    panel {
+        compatible = "edo,edo1455";
+        power-supply = <&panel_power>;
+    };

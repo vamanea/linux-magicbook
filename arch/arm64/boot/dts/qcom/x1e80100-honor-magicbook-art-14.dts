@@ -793,7 +793,6 @@
 };
 
 &dispcc {
-        /* HACK: disable until a panel driver is ready to retain simplefb */
         status = "okay";
 };
 
@@ -973,7 +972,7 @@
 
 	aux-bus {
 		panel {
-			compatible = "edp-panel";
+			compatible = "edo,edo1455";
 			power-supply = <&vreg_edp_3p3>;
 
 			port {
