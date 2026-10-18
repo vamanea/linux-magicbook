@@ -251,6 +251,25 @@ static inline struct panel_edp *to_panel_edp(struct drm_panel *panel)
 	return container_of(panel, struct panel_edp, base);
 }
 
+static int
+write_dsc_decompression_flag(struct drm_dp_aux *aux, bool set)
+{
+	int err;
+	u8 val;
+	u8 flag = DP_DECOMPRESSION_EN;
+
+	err = drm_dp_dpcd_readb(aux, DP_DSC_ENABLE, &val);
+	if (err < 0)
+		return err;
+
+	if (set)
+		val |= flag;
+	else
+		val &= ~flag;
+
+	return drm_dp_dpcd_writeb(aux, DP_DSC_ENABLE, val);
+}
+
 static unsigned int panel_edp_get_timings_modes(struct panel_edp *panel,
 						struct drm_connector *connector)
 {
@@ -453,6 +472,9 @@ static int panel_edp_prepare_once(struct panel_edp *p)
 	}
 
 	gpiod_set_value_cansleep(p->enable_gpio, 1);
+	if (IS_ENABLED(CONFIG_ARCH_QCOM)) {
+		write_dsc_decompression_flag(p->aux, false);
+	}
 	drm_dp_dpcd_set_powered(p->aux, true);
 
 	p->powered_on_time = ktime_get_boottime();
@@ -2105,6 +2127,7 @@ static const struct edp_panel_entry edp_panels[] = {
 	EDP_PANEL_ENTRY('T', 'M', 'A', 0x0811, &delay_200_500_e80_d50, "TM140VDXP01-04"),
 	EDP_PANEL_ENTRY('T', 'M', 'A', 0x2094, &delay_200_500_e50_d100, "TL140VDMS03-01"),
 
+	EDP_PANEL_ENTRY('E', 'D', 'O', 0x4179, &delay_200_500_e50, "EDO14.55"),
 	{ /* sentinal */ }
 };
 
